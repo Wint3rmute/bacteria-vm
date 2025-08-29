@@ -44,7 +44,7 @@ impl VM {
             self.memory[idx] = val;
             self.initial_state[idx] = val;
         }
-        self.pc = 0;
+    self.pc = 0;
         self.acc = 0;
         self.halted = false;
         self.total_steps_count = 0;
@@ -94,7 +94,7 @@ impl VM {
             self.memory[i] = val;
             self.initial_state[i] = val;
         }
-        self.pc = 0;
+    self.pc = 0;
         self.acc = 0;
         self.halted = false;
         self.total_steps_count = 0;
@@ -228,6 +228,23 @@ pub fn instruction_to_string(opcode: u8) -> &'static str {
         self.recent_instructions.push(instr_log);
         if self.recent_instructions.len() > 16 {
             self.recent_instructions.remove(0);
+        }
+        // If only 2 unique instructions in recent_instructions, halt and reset steps
+        if self.recent_instructions.len() == 16 {
+            let mut unique_instr = std::collections::HashSet::new();
+            for s in &self.recent_instructions {
+                // Extract instruction name (assumes format: "xxxx: NAME (0xYY)...")
+                if let Some(colon) = s.find(':') {
+                    if let Some(space) = s[colon+2..].find(' ') {
+                        let name = &s[colon+2..colon+2+space];
+                        unique_instr.insert(name);
+                    }
+                }
+            }
+            if unique_instr.len() <= 2 {
+                self.halted = true;
+                self.total_steps_count = 0;
+            }
         }
     }
 
