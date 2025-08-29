@@ -1,8 +1,17 @@
 use std::fs::File;
 use std::io::Write;
 
+
+use macroquad::prelude::*;
+use tracing::info;
+use tracing_subscriber;
+use ::rand::thread_rng;
+
+mod compute;
+
 /// Draw a single VM's memory as a grid at the given offset
 fn draw_vm(vm: &compute::VM, offset_x: f32, offset_y: f32, grid_size: f32, padding: f32) {
+    // Draw the VM grid centered in its pane
     let cols = 16;
     let rows = 16;
     let square_width = (grid_size - (cols as f32 - 1.0) * padding) / cols as f32;
@@ -14,30 +23,21 @@ fn draw_vm(vm: &compute::VM, offset_x: f32, offset_y: f32, grid_size: f32, paddi
             let idx = row * cols + col;
             let value = vm.memory[idx];
             let t = value as f32 / 255.0;
-            // More varied color palette: red, orange, yellow, green, cyan, blue, purple, white
             let color = if t < 0.15 {
-                // Red
                 Color::new(1.0, t * 6.0, 0.0, 1.0)
             } else if t < 0.30 {
-                // Orange
                 Color::new(1.0, 0.5 + (t - 0.15) * 3.33, 0.0, 1.0)
             } else if t < 0.45 {
-                // Yellow
                 Color::new(1.0, 1.0, (t - 0.30) * 6.66, 1.0)
             } else if t < 0.60 {
-                // Green
                 Color::new(1.0 - (t - 0.45) * 6.66, 1.0, 0.0, 1.0)
             } else if t < 0.75 {
-                // Cyan
                 Color::new(0.0, 1.0, (t - 0.60) * 6.66, 1.0)
             } else if t < 0.90 {
-                // Blue
                 Color::new(0.0, 1.0 - (t - 0.75) * 6.66, 1.0, 1.0)
             } else if t < 0.98 {
-                // Purple
                 Color::new((t - 0.90) * 12.5, 0.0, 1.0, 1.0)
             } else {
-                // White
                 Color::new(1.0, 1.0, 1.0, 1.0)
             };
             draw_rectangle(x, y, square_width, square_height, color);
@@ -46,7 +46,6 @@ fn draw_vm(vm: &compute::VM, offset_x: f32, offset_y: f32, grid_size: f32, paddi
             }
         }
     }
-
     // Draw the current number of steps centered and large
     let steps_text = format!("{}", vm.total_steps_count);
     let text_size = grid_size * 0.5;
@@ -54,14 +53,25 @@ fn draw_vm(vm: &compute::VM, offset_x: f32, offset_y: f32, grid_size: f32, paddi
     let text_x = offset_x + (grid_size - text_dimensions.width) / 2.0;
     let text_y = offset_y + (grid_size + text_dimensions.height) / 2.0;
     draw_text(&steps_text, text_x, text_y, text_size, WHITE);
+    // Draw the log view to the right of the VM grid (no background, white text)
+    let log_width = grid_size * 1.2;
+    let log_height = grid_size;
+    let log_x = offset_x + grid_size + padding * 2.0;
+    let log_y = offset_y;
+    let log_font_size = (grid_size / 18.0).max(12.0);
+    let mut y = log_y + log_font_size + 4.0;
+    let max_lines = (log_height / (log_font_size + 2.0)).floor() as usize;
+    let start_idx = if vm.recent_instructions.len() > max_lines {
+        vm.recent_instructions.len() - max_lines
+    } else {
+        0
+    };
+    for line in vm.recent_instructions.iter().skip(start_idx) {
+        draw_text(line, log_x + 8.0, y, log_font_size, WHITE);
+        y += log_font_size + 2.0;
+    }
 }
 
-use macroquad::prelude::*;
-use tracing::info;
-use tracing_subscriber;
-use ::rand::{Rng, thread_rng};
-
-mod compute;
 
 // Configure tracing subscriber for logging
 fn configure_tracing() {
@@ -83,7 +93,7 @@ async fn main() {
     let mut rng = thread_rng();
     // Set grid dimensions (e.g., 2x6)
     let vm_rows = 4;
-    let vm_cols = 6;
+    let vm_cols = 4;
     let vm_count = vm_rows * vm_cols;
     let mut vms: Vec<compute::VM> = (0..vm_count).map(|_| {
         let mut vm = compute::VM::new();

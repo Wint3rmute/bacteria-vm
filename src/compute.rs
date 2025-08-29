@@ -1,7 +1,6 @@
 
 // compute.rs
 
-use tracing::info;
 // Simple 8-bit virtual machine
 
 pub const MEM_SIZE: usize = 256;
@@ -14,6 +13,7 @@ pub struct VM {
     pub acc: u8,   // accumulator
     pub halted: bool,
     pub total_steps_count: usize, // steps before halting
+    pub recent_instructions: Vec<String>, // log of recent instructions
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -74,6 +74,7 @@ impl VM {
             acc: 0,
             halted: false,
             total_steps_count: 0,
+            recent_instructions: Vec::with_capacity(16),
         }
     }
 
@@ -97,6 +98,7 @@ impl VM {
         self.acc = 0;
         self.halted = false;
         self.total_steps_count = 0;
+        self.recent_instructions.clear();
     }
 
     pub fn step(&mut self) {
@@ -106,29 +108,50 @@ impl VM {
             return;
         }
         self.total_steps_count += 1;
-        let opcode = self.memory[self.pc];
-    tracing::trace!("VM step: pc={}, acc={}, opcode=0x{:02X}", self.pc, self.acc, opcode);
+    let opcode = self.memory[self.pc];
+    let instr_name = instruction_to_string(opcode);
+    let mut instr_log = format!("{:04}: {} (0x{:02X})", self.pc, instr_name, opcode);
+/// Convert an instruction opcode to its string name
+pub fn instruction_to_string(opcode: u8) -> &'static str {
+    match opcode {
+        x if x == Instruction::NOP as u8 => "NOP",
+        x if x == Instruction::LDA as u8 => "LDA",
+        x if x == Instruction::STA as u8 => "STA",
+        x if x == Instruction::ADD as u8 => "ADD",
+        x if x == Instruction::SUB as u8 => "SUB",
+        x if x == Instruction::JMP as u8 => "JMP",
+        x if x == Instruction::JZ as u8 => "JZ",
+        x if x == Instruction::INC as u8 => "INC",
+        x if x == Instruction::DEC as u8 => "DEC",
+        x if x == Instruction::SWP as u8 => "SWP",
+        x if x == Instruction::CMP as u8 => "CMP",
+        x if x == Instruction::HLT as u8 => "HLT",
+        _ => "???",
+    }
+}
         match opcode {
             x if x == Instruction::CMP as u8 => {
                 let addr = self.memory.get(self.pc + 1).copied().unwrap_or(0) as usize;
                 let val = self.memory.get(addr).copied().unwrap_or(0);
-                let result = self.acc.cmp(&val);
-                tracing::trace!("CMP acc={} with addr={}, value={}, result={:?}", self.acc, addr, val, result);
-                // No flags, just log the result
+                instr_log = format!("{:04}: {} (0x{:02X}) acc={} addr={} val={}", self.pc, instr_name, opcode, self.acc, addr, val);
+                tracing::trace!("CMP acc={} with addr={}, value={}", self.acc, addr, val);
                 self.pc += 2;
             }
             x if x == Instruction::NOP as u8 => {
+                instr_log = format!("{:04}: {} (0x{:02X})", self.pc, instr_name, opcode);
                 tracing::trace!("NOP");
                 self.pc += 1;
             }
             x if x == Instruction::LDA as u8 => {
                 let addr = self.memory.get(self.pc + 1).copied().unwrap_or(0) as usize;
+                instr_log = format!("{:04}: {} (0x{:02X}) addr={} -> acc={}", self.pc, instr_name, opcode, addr, self.memory.get(addr).copied().unwrap_or(0));
                 tracing::trace!("LDA from addr={}", addr);
                 self.acc = self.memory.get(addr).copied().unwrap_or(0);
                 self.pc += 2;
             }
             x if x == Instruction::STA as u8 => {
                 let addr = self.memory.get(self.pc + 1).copied().unwrap_or(0) as usize;
+                instr_log = format!("{:04}: {} (0x{:02X}) acc={} -> addr={}", self.pc, instr_name, opcode, self.acc, addr);
                 tracing::trace!("STA to addr={}", addr);
                 if addr < MEM_SIZE {
                     self.memory[addr] = self.acc;
@@ -138,6 +161,7 @@ impl VM {
             x if x == Instruction::ADD as u8 => {
                 let addr = self.memory.get(self.pc + 1).copied().unwrap_or(0) as usize;
                 let val = self.memory.get(addr).copied().unwrap_or(0);
+                instr_log = format!("{:04}: {} (0x{:02X}) acc={} + val={} (addr={})", self.pc, instr_name, opcode, self.acc, val, addr);
                 tracing::trace!("ADD from addr={}, value={}", addr, val);
                 self.acc = self.acc.wrapping_add(val);
                 self.pc += 2;
@@ -145,17 +169,20 @@ impl VM {
             x if x == Instruction::SUB as u8 => {
                 let addr = self.memory.get(self.pc + 1).copied().unwrap_or(0) as usize;
                 let val = self.memory.get(addr).copied().unwrap_or(0);
+                instr_log = format!("{:04}: {} (0x{:02X}) acc={} - val={} (addr={})", self.pc, instr_name, opcode, self.acc, val, addr);
                 tracing::trace!("SUB from addr={}, value={}", addr, val);
                 self.acc = self.acc.wrapping_sub(val);
                 self.pc += 2;
             }
             x if x == Instruction::JMP as u8 => {
                 let addr = self.memory.get(self.pc + 1).copied().unwrap_or(0) as usize;
+                instr_log = format!("{:04}: {} (0x{:02X}) to addr={}", self.pc, instr_name, opcode, addr);
                 tracing::trace!("JMP to addr={}", addr);
                 self.pc = addr;
             }
             x if x == Instruction::JZ as u8 => {
                 let addr = self.memory.get(self.pc + 1).copied().unwrap_or(0) as usize;
+                instr_log = format!("{:04}: {} (0x{:02X}) to addr={} if acc==0 (acc={})", self.pc, instr_name, opcode, addr, self.acc);
                 tracing::trace!("JZ to addr={} if acc==0", addr);
                 if self.acc == 0 {
                     self.pc = addr;
@@ -164,17 +191,20 @@ impl VM {
                 }
             }
             x if x == Instruction::INC as u8 => {
+                instr_log = format!("{:04}: {} (0x{:02X}) acc={} -> {}", self.pc, instr_name, opcode, self.acc, self.acc.wrapping_add(1));
                 tracing::trace!("INC");
                 self.acc = self.acc.wrapping_add(1);
                 self.pc += 1;
             }
             x if x == Instruction::DEC as u8 => {
+                instr_log = format!("{:04}: {} (0x{:02X}) acc={} -> {}", self.pc, instr_name, opcode, self.acc, self.acc.wrapping_sub(1));
                 tracing::trace!("DEC");
                 self.acc = self.acc.wrapping_sub(1);
                 self.pc += 1;
             }
             x if x == Instruction::SWP as u8 => {
                 let addr = self.memory.get(self.pc + 1).copied().unwrap_or(0) as usize;
+                instr_log = format!("{:04}: {} (0x{:02X}) acc={} <-> addr={} val={}", self.pc, instr_name, opcode, self.acc, addr, self.memory.get(addr).copied().unwrap_or(0));
                 tracing::trace!("SWP with addr={}", addr);
                 if addr < MEM_SIZE {
                     let tmp = self.memory[addr];
@@ -184,13 +214,20 @@ impl VM {
                 self.pc += 2;
             }
             x if x == Instruction::HLT as u8 => {
+                instr_log = format!("{:04}: {} (0x{:02X})", self.pc, instr_name, opcode);
                 tracing::debug!("HLT - VM halted!");
                 self.halted = true;
             }
             _ => {
+                instr_log = format!("{:04}: {} (0x{:02X})", self.pc, instr_name, opcode);
                 tracing::trace!("Unknown instruction: 0x{:02X}", opcode);
                 self.halted = true;
             }
+        }
+        // Store recent instructions (keep last 16)
+        self.recent_instructions.push(instr_log);
+        if self.recent_instructions.len() > 16 {
+            self.recent_instructions.remove(0);
         }
     }
 
