@@ -1,4 +1,3 @@
-
 use std::fs::File;
 use std::io::Write;
 
@@ -47,6 +46,14 @@ fn draw_vm(vm: &compute::VM, offset_x: f32, offset_y: f32, grid_size: f32, paddi
             }
         }
     }
+
+    // Draw the current number of steps centered and large
+    let steps_text = format!("{}", vm.total_steps_count);
+    let text_size = grid_size * 0.5;
+    let text_dimensions = measure_text(&steps_text, None, text_size as u16, 1.0);
+    let text_x = offset_x + (grid_size - text_dimensions.width) / 2.0;
+    let text_y = offset_y + (grid_size + text_dimensions.height) / 2.0;
+    draw_text(&steps_text, text_x, text_y, text_size, WHITE);
 }
 
 use macroquad::prelude::*;
@@ -60,8 +67,9 @@ mod compute;
 fn configure_tracing() {
     use tracing_subscriber::fmt;
     use tracing_subscriber::prelude::*;
+    use tracing_subscriber::filter::LevelFilter;
     tracing_subscriber::registry()
-        .with(fmt::layer())
+        .with(fmt::layer().with_filter(LevelFilter::INFO))
         .init();
 }
 
@@ -85,40 +93,48 @@ async fn main() {
 
     let mut paused = false;
 
+    let mut step_delay_ms: f64 = 10.0; // milliseconds between VM steps
+    let mut last_step_time = get_time();
+
 
     loop {
         clear_background(BLACK);
 
         let padding = 5.0;
         let extra_padding = 10.0; // Extra padding between VMs
-        // Calculate cell size so that all VMs fit and are square
-        let available_width = screen_width() - (padding + extra_padding) * (vm_cols as f32 + 1.0);
-        let available_height = screen_height() - (padding + extra_padding) * (vm_rows as f32 + 1.0);
-        let cell_size = available_width.min(available_height) / (vm_cols.max(vm_rows) as f32);
+    // Calculate cell size so that all VMs fit and use all available space
+    let available_width = screen_width() - (padding + extra_padding) * (vm_cols as f32 + 1.0);
+    let available_height = screen_height() - (padding + extra_padding) * (vm_rows as f32 + 1.0);
+    let cell_width = available_width / vm_cols as f32;
+    let cell_height = available_height / vm_rows as f32;
 
-        // Calculate total grid size
-        let total_grid_width = vm_cols as f32 * cell_size + (vm_cols as f32 + 1.0) * (padding + extra_padding);
-        let total_grid_height = vm_rows as f32 * cell_size + (vm_rows as f32 + 1.0) * (padding + extra_padding);
+    // Calculate total grid size
+    let total_grid_width = vm_cols as f32 * cell_width + (vm_cols as f32 + 1.0) * (padding + extra_padding);
+    let total_grid_height = vm_rows as f32 * cell_height + (vm_rows as f32 + 1.0) * (padding + extra_padding);
 
-        // Calculate offsets to center the grid
-        let start_x = (screen_width() - total_grid_width) / 2.0 + padding + extra_padding;
-        let start_y = (screen_height() - total_grid_height) / 2.0 + padding + extra_padding;
+    // Calculate offsets to center the grid
+    let start_x = (screen_width() - total_grid_width) / 2.0 + padding + extra_padding;
+    let start_y = (screen_height() - total_grid_height) / 2.0 + padding + extra_padding;
 
         // Arrange VMs in a vm_rows x vm_cols grid
         for i in 0..vm_count {
             let row = i / vm_cols;
             let col = i % vm_cols;
-            let offset_x = start_x + col as f32 * (cell_size + padding + extra_padding);
-            let offset_y = start_y + row as f32 * (cell_size + padding + extra_padding);
+            let offset_x = start_x + col as f32 * (cell_width + padding + extra_padding);
+            let offset_y = start_y + row as f32 * (cell_height + padding + extra_padding);
             // Draw background
             draw_rectangle(
                 offset_x - padding,
                 offset_y - padding,
-                cell_size + 2.0 * padding,
-                cell_size + 2.0 * padding,
+                cell_width + 2.0 * padding,
+                cell_height + 2.0 * padding,
                 DARKGRAY,
             );
-            draw_vm(&vms[i], offset_x, offset_y, cell_size, padding);
+            // Center the VM grid inside the background rectangle
+            let vm_size = cell_width.min(cell_height);
+            let center_x = offset_x + (cell_width - vm_size) / 2.0;
+            let center_y = offset_y + (cell_height - vm_size) / 2.0;
+            draw_vm(&vms[i], center_x, center_y, vm_size, padding);
         }
 
         // Toggle pause/unpause with space
@@ -127,11 +143,27 @@ async fn main() {
             info!("Simulation {}", if paused {"paused"} else {"running"});
         }
 
-        // Run simulation at 60fps if not paused
-        if !paused {
+                // Adjust step_delay_ms with left/right arrows and R key
+        if is_key_pressed(KeyCode::Right) {
+            step_delay_ms *= 2.0;
+            info!("step_delay_ms scaled up to {} ms", step_delay_ms);
+        }
+        if is_key_pressed(KeyCode::Left) {
+            step_delay_ms = (step_delay_ms / 2.0).max(1.0);
+            info!("step_delay_ms halved to {} ms", step_delay_ms);
+        }
+        if is_key_pressed(KeyCode::R) {
+            step_delay_ms = 100.0;
+            info!("step_delay_ms reset to 100 ms");
+        }
+
+        // Run simulation at user-defined interval if not paused
+        let now = get_time();
+    if !paused && (now - last_step_time) * 1000.0 >= step_delay_ms {
             for vm in &mut vms {
                 vm.step();
             }
+            last_step_time = now;
         }
         // Single step forward with 's' key when paused
         if paused && is_key_pressed(KeyCode::S) {
@@ -140,12 +172,16 @@ async fn main() {
                 vm.step();
             }
         }
-        
+        // Toggle fullscreen with 'f' key
+        if is_key_pressed(KeyCode::F) {
+            set_fullscreen(true);
+        }
+
 
         // If any VM is halted, check if it has the longest run
         for vm in &mut vms {
             if vm.halted {
-                info!("VM halted, generating new program and restarting");
+                tracing::debug!("VM halted, generating new program and restarting");
                 if vm.total_steps_count > longest_steps {
                     longest_steps = vm.total_steps_count;
                     best_initial_state = Some(vm.initial_state);

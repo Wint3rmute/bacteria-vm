@@ -184,7 +184,7 @@ impl VM {
                 self.pc += 2;
             }
             x if x == Instruction::HLT as u8 => {
-                tracing::warn!("HLT - VM halted!");
+                tracing::debug!("HLT - VM halted!");
                 self.halted = true;
             }
             _ => {
