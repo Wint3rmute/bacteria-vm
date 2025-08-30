@@ -1,11 +1,10 @@
 use std::fs::File;
 use std::io::Write;
 
-
+use ::rand::thread_rng;
 use macroquad::prelude::*;
 use tracing::info;
 use tracing_subscriber;
-use ::rand::thread_rng;
 
 mod compute;
 
@@ -72,12 +71,11 @@ fn draw_vm(vm: &compute::VM, offset_x: f32, offset_y: f32, grid_size: f32, paddi
     }
 }
 
-
 // Configure tracing subscriber for logging
 fn configure_tracing() {
+    use tracing_subscriber::filter::LevelFilter;
     use tracing_subscriber::fmt;
     use tracing_subscriber::prelude::*;
-    use tracing_subscriber::filter::LevelFilter;
     tracing_subscriber::registry()
         .with(fmt::layer().with_filter(LevelFilter::INFO))
         .init();
@@ -95,36 +93,39 @@ async fn main() {
     let vm_rows = 4;
     let vm_cols = 4;
     let vm_count = vm_rows * vm_cols;
-    let mut vms: Vec<compute::VM> = (0..vm_count).map(|_| {
-        let mut vm = compute::VM::new();
-        vm.randomize(&mut rng);
-        vm
-    }).collect();
+    let mut vms: Vec<compute::VM> = (0..vm_count)
+        .map(|_| {
+            let mut vm = compute::VM::new();
+            vm.randomize(&mut rng);
+            vm
+        })
+        .collect();
 
     let mut paused = false;
 
     let mut step_delay_ms: f64 = 10.0; // milliseconds between VM steps
     let mut last_step_time = get_time();
 
-
     loop {
         clear_background(BLACK);
 
         let padding = 5.0;
         let extra_padding = 10.0; // Extra padding between VMs
-    // Calculate cell size so that all VMs fit and use all available space
-    let available_width = screen_width() - (padding + extra_padding) * (vm_cols as f32 + 1.0);
-    let available_height = screen_height() - (padding + extra_padding) * (vm_rows as f32 + 1.0);
-    let cell_width = available_width / vm_cols as f32;
-    let cell_height = available_height / vm_rows as f32;
+        // Calculate cell size so that all VMs fit and use all available space
+        let available_width = screen_width() - (padding + extra_padding) * (vm_cols as f32 + 1.0);
+        let available_height = screen_height() - (padding + extra_padding) * (vm_rows as f32 + 1.0);
+        let cell_width = available_width / vm_cols as f32;
+        let cell_height = available_height / vm_rows as f32;
 
-    // Calculate total grid size
-    let total_grid_width = vm_cols as f32 * cell_width + (vm_cols as f32 + 1.0) * (padding + extra_padding);
-    let total_grid_height = vm_rows as f32 * cell_height + (vm_rows as f32 + 1.0) * (padding + extra_padding);
+        // Calculate total grid size
+        let total_grid_width =
+            vm_cols as f32 * cell_width + (vm_cols as f32 + 1.0) * (padding + extra_padding);
+        let total_grid_height =
+            vm_rows as f32 * cell_height + (vm_rows as f32 + 1.0) * (padding + extra_padding);
 
-    // Calculate offsets to center the grid
-    let start_x = (screen_width() - total_grid_width) / 2.0 + padding + extra_padding;
-    let start_y = (screen_height() - total_grid_height) / 2.0 + padding + extra_padding;
+        // Calculate offsets to center the grid
+        let start_x = (screen_width() - total_grid_width) / 2.0 + padding + extra_padding;
+        let start_y = (screen_height() - total_grid_height) / 2.0 + padding + extra_padding;
 
         // Arrange VMs in a vm_rows x vm_cols grid
         for i in 0..vm_count {
@@ -150,10 +151,10 @@ async fn main() {
         // Toggle pause/unpause with space
         if is_key_pressed(KeyCode::Space) {
             paused = !paused;
-            info!("Simulation {}", if paused {"paused"} else {"running"});
+            info!("Simulation {}", if paused { "paused" } else { "running" });
         }
 
-                // Adjust step_delay_ms with left/right arrows and R key
+        // Adjust step_delay_ms with left/right arrows and R key
         if is_key_pressed(KeyCode::Right) {
             step_delay_ms *= 2.0;
             info!("step_delay_ms scaled up to {} ms", step_delay_ms);
@@ -169,7 +170,7 @@ async fn main() {
 
         // Run simulation at user-defined interval if not paused
         let now = get_time();
-    if !paused && (now - last_step_time) * 1000.0 >= step_delay_ms {
+        if !paused && (now - last_step_time) * 1000.0 >= step_delay_ms {
             for vm in &mut vms {
                 vm.step();
             }
@@ -187,7 +188,6 @@ async fn main() {
             set_fullscreen(true);
         }
 
-
         // If any VM is halted, check if it has the longest run
         for vm in &mut vms {
             if vm.halted {
@@ -198,7 +198,10 @@ async fn main() {
                     // Save to file
                     if let Ok(mut file) = File::create("best_vm_program.bin") {
                         let _ = file.write_all(&vm.initial_state);
-                        info!("Saved best initial_state to best_vm_program.bin (steps: {})", longest_steps);
+                        info!(
+                            "Saved best initial_state to best_vm_program.bin (steps: {})",
+                            longest_steps
+                        );
                     }
                 }
                 // Genetic evolution: use best VM, then partial_randomize
