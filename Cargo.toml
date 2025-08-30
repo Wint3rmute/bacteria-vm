@@ -8,3 +8,7 @@ macroquad = "0.4.14"
 rand = "0.9.2"
 tracing = "*"
 tracing-subscriber = "*"
+
+[[example]]
+name = "bacteria_simulation"
+path = "examples/bacteria_simulation.rs"
