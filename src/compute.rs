@@ -166,7 +166,7 @@ impl VM {
         self.total_steps_count += 1;
         let opcode = self.memory[self.pc];
         let instruction = Instruction::from(opcode);
-        
+
         let log_entry = self.execute_instruction(instruction);
         self.log_instruction(log_entry);
         self.check_for_infinite_loop();
@@ -190,7 +190,12 @@ impl VM {
     }
     fn execute_nop(&mut self) -> String {
         tracing::trace!("NOP");
-        let log = format!("{:04}: {} (0x{:02X})", self.pc, Instruction::NOP, self.memory[self.pc]);
+        let log = format!(
+            "{:04}: {} (0x{:02X})",
+            self.pc,
+            Instruction::NOP,
+            self.memory[self.pc]
+        );
         self.pc += 1;
         log
     }
@@ -198,8 +203,14 @@ impl VM {
     fn execute_lda(&mut self) -> String {
         let addr = self.read_memory(self.pc + 1) as usize;
         let value = self.read_memory(addr);
-        let log = format!("{:04}: {} (0x{:02X}) addr={} -> acc={}", 
-                         self.pc, Instruction::LDA, self.memory[self.pc], addr, value);
+        let log = format!(
+            "{:04}: {} (0x{:02X}) addr={} -> acc={}",
+            self.pc,
+            Instruction::LDA,
+            self.memory[self.pc],
+            addr,
+            value
+        );
         tracing::trace!("LDA from addr={}", addr);
         self.acc = value;
         self.pc += 2;
@@ -208,8 +219,14 @@ impl VM {
 
     fn execute_sta(&mut self) -> String {
         let addr = self.read_memory(self.pc + 1) as usize;
-        let log = format!("{:04}: {} (0x{:02X}) acc={} -> addr={}", 
-                         self.pc, Instruction::STA, self.memory[self.pc], self.acc, addr);
+        let log = format!(
+            "{:04}: {} (0x{:02X}) acc={} -> addr={}",
+            self.pc,
+            Instruction::STA,
+            self.memory[self.pc],
+            self.acc,
+            addr
+        );
         tracing::trace!("STA to addr={}", addr);
         self.write_memory(addr, self.acc);
         self.pc += 2;
@@ -219,8 +236,15 @@ impl VM {
     fn execute_add(&mut self) -> String {
         let addr = self.read_memory(self.pc + 1) as usize;
         let val = self.read_memory(addr);
-        let log = format!("{:04}: {} (0x{:02X}) acc={} + val={} (addr={})", 
-                         self.pc, Instruction::ADD, self.memory[self.pc], self.acc, val, addr);
+        let log = format!(
+            "{:04}: {} (0x{:02X}) acc={} + val={} (addr={})",
+            self.pc,
+            Instruction::ADD,
+            self.memory[self.pc],
+            self.acc,
+            val,
+            addr
+        );
         tracing::trace!("ADD from addr={}, value={}", addr, val);
         self.acc = self.acc.wrapping_add(val);
         self.pc += 2;
@@ -230,8 +254,15 @@ impl VM {
     fn execute_sub(&mut self) -> String {
         let addr = self.read_memory(self.pc + 1) as usize;
         let val = self.read_memory(addr);
-        let log = format!("{:04}: {} (0x{:02X}) acc={} - val={} (addr={})", 
-                         self.pc, Instruction::SUB, self.memory[self.pc], self.acc, val, addr);
+        let log = format!(
+            "{:04}: {} (0x{:02X}) acc={} - val={} (addr={})",
+            self.pc,
+            Instruction::SUB,
+            self.memory[self.pc],
+            self.acc,
+            val,
+            addr
+        );
         tracing::trace!("SUB from addr={}, value={}", addr, val);
         self.acc = self.acc.wrapping_sub(val);
         self.pc += 2;
@@ -240,8 +271,13 @@ impl VM {
 
     fn execute_jmp(&mut self) -> String {
         let addr = self.read_memory(self.pc + 1) as usize;
-        let log = format!("{:04}: {} (0x{:02X}) to addr={}", 
-                         self.pc, Instruction::JMP, self.memory[self.pc], addr);
+        let log = format!(
+            "{:04}: {} (0x{:02X}) to addr={}",
+            self.pc,
+            Instruction::JMP,
+            self.memory[self.pc],
+            addr
+        );
         tracing::trace!("JMP to addr={}", addr);
         self.pc = addr;
         log
@@ -249,8 +285,14 @@ impl VM {
 
     fn execute_jz(&mut self) -> String {
         let addr = self.read_memory(self.pc + 1) as usize;
-        let log = format!("{:04}: {} (0x{:02X}) to addr={} if acc==0 (acc={})", 
-                         self.pc, Instruction::JZ, self.memory[self.pc], addr, self.acc);
+        let log = format!(
+            "{:04}: {} (0x{:02X}) to addr={} if acc==0 (acc={})",
+            self.pc,
+            Instruction::JZ,
+            self.memory[self.pc],
+            addr,
+            self.acc
+        );
         tracing::trace!("JZ to addr={} if acc==0", addr);
         if self.acc == 0 {
             self.pc = addr;
@@ -263,8 +305,14 @@ impl VM {
     fn execute_inc(&mut self) -> String {
         let old_acc = self.acc;
         self.acc = self.acc.wrapping_add(1);
-        let log = format!("{:04}: {} (0x{:02X}) acc={} -> {}", 
-                         self.pc, Instruction::INC, self.memory[self.pc], old_acc, self.acc);
+        let log = format!(
+            "{:04}: {} (0x{:02X}) acc={} -> {}",
+            self.pc,
+            Instruction::INC,
+            self.memory[self.pc],
+            old_acc,
+            self.acc
+        );
         tracing::trace!("INC");
         self.pc += 1;
         log
@@ -273,8 +321,14 @@ impl VM {
     fn execute_dec(&mut self) -> String {
         let old_acc = self.acc;
         self.acc = self.acc.wrapping_sub(1);
-        let log = format!("{:04}: {} (0x{:02X}) acc={} -> {}", 
-                         self.pc, Instruction::DEC, self.memory[self.pc], old_acc, self.acc);
+        let log = format!(
+            "{:04}: {} (0x{:02X}) acc={} -> {}",
+            self.pc,
+            Instruction::DEC,
+            self.memory[self.pc],
+            old_acc,
+            self.acc
+        );
         tracing::trace!("DEC");
         self.pc += 1;
         log
@@ -283,8 +337,15 @@ impl VM {
     fn execute_swp(&mut self) -> String {
         let addr = self.read_memory(self.pc + 1) as usize;
         let old_mem_val = self.read_memory(addr);
-        let log = format!("{:04}: {} (0x{:02X}) acc={} <-> addr={} val={}", 
-                         self.pc, Instruction::SWP, self.memory[self.pc], self.acc, addr, old_mem_val);
+        let log = format!(
+            "{:04}: {} (0x{:02X}) acc={} <-> addr={} val={}",
+            self.pc,
+            Instruction::SWP,
+            self.memory[self.pc],
+            self.acc,
+            addr,
+            old_mem_val
+        );
         tracing::trace!("SWP with addr={}", addr);
         if addr < MEM_SIZE {
             let tmp = self.memory[addr];
@@ -298,15 +359,27 @@ impl VM {
     fn execute_cmp(&mut self) -> String {
         let addr = self.read_memory(self.pc + 1) as usize;
         let val = self.read_memory(addr);
-        let log = format!("{:04}: {} (0x{:02X}) acc={} addr={} val={}", 
-                         self.pc, Instruction::CMP, self.memory[self.pc], self.acc, addr, val);
+        let log = format!(
+            "{:04}: {} (0x{:02X}) acc={} addr={} val={}",
+            self.pc,
+            Instruction::CMP,
+            self.memory[self.pc],
+            self.acc,
+            addr,
+            val
+        );
         tracing::trace!("CMP acc={} with addr={}, value={}", self.acc, addr, val);
         self.pc += 2;
         log
     }
 
     fn execute_hlt(&mut self) -> String {
-        let log = format!("{:04}: {} (0x{:02X})", self.pc, Instruction::HLT, self.memory[self.pc]);
+        let log = format!(
+            "{:04}: {} (0x{:02X})",
+            self.pc,
+            Instruction::HLT,
+            self.memory[self.pc]
+        );
         tracing::debug!("HLT - VM halted!");
         self.halted = true;
         log
